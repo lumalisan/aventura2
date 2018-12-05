@@ -13,12 +13,12 @@ all: $(OBJS) $(PROGRAMS)
 #$(PROGRAMS): $(LIBRARIES) $(INCLUDES)
 #   $(CC) $(LDFLAGS) $(LIBRARIES) $@.o -o $@
 
-my_shell: prompt.o
- 	$(CC) $@.o -o $@ $(LDFLAGS) $(LIBRARIES)
+prompt: prompt.o
+	$(CC) $@.o -o $@ $(LDFLAGS) $(LIBRARIES)
 
 %.o: %.c $(INCLUDES)
-    $(CC) $(CFLAGS) -o $@ -c $<
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 .PHONY: clean
 clean:
-    rm -rf *.o *~ *.tmp $(PROGRAMS)
+	rm -rf *.o *~ *.tmp $(PROGRAMS)
