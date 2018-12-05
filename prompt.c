@@ -15,7 +15,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-//#define USE_READLINE
+#define USE_READLINE 1
 
 struct info_process {
 	pid_t pid;
@@ -45,6 +45,8 @@ int main(int argc, char *argv[]) {
 	//Bucle principal del programa donde leemos los comandos de consola
 	//para despues ejecutarlos según la opción introducida
 	while (read_line(line)) {
+		printf("DEBUG READLINE: %s\n",line);
+
 		execute_line(line);
 	}
 	return 0;
@@ -72,14 +74,15 @@ char *read_line(char *line){
 		}
 
 		/* Get a line from the user. */
-		line_read = readline ("");  	//El argumento es la cadena del prompt
+		line_read = readline("");  	//El argumento es la cadena del prompt
 										//Devuelve la línea sin \n. Si se pulsa ^D retorna NULL
 
 		/* If the line has any text in it, save it on the history. */
 		if (line_read && *line_read)  
-			add_history (line_read);
-
-		return (line_read);
+			add_history(line_read);
+		
+		strcpy(line,line_read);
+		return line;
 	#else
 		char *ptr = fgets(line, COMMAND_LINE_SIZE, stdin); // leer linea
 
