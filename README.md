@@ -6,4 +6,4 @@ Enlaces útiles:
 
 
 
-I love :coffee: :pizza: and :gaymale:.
+I love :coffee: :pizza: and :dancer:.
