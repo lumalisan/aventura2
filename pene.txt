@@ -1,0 +1,10 @@
+comandos1.sh
+Makefile
+pene.txt
+prompt
+prompt.c
+prompt.dSYM
+prompt.o
+promt
+promt.dSYM
+tempCodeRunnerFile.c
