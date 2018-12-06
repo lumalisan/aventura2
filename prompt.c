@@ -84,6 +84,8 @@ char *read_line(char *line){
 		if (line_read && *line_read){
 			add_history(line_read);
 			strcpy(line,line_read);
+		} else {
+			line = NULL;
 		}
 		
 		return line;
