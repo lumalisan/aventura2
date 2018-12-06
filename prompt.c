@@ -15,7 +15,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-#define USE_READLINE
+//#define USE_READLINE
 
 struct info_process {
 	pid_t pid;
@@ -41,7 +41,9 @@ static char *line_read = (char *)NULL;
 
 
 int main(int argc, char *argv[]) {
-	char line[COMMAND_LINE_SIZE];		
+	char line[COMMAND_LINE_SIZE];	
+	signal(SIGINT,ctrlc);	// Cuando llega un CTRL + C, llamamos la funcion apropiada
+	signal(SIGCHLD,reaper);	// Cuando llega la señal SIGCHLD, llamamos al reaper	
 	//Bucle principal del programa donde leemos los comandos de consola
 	//para despues ejecutarlos según la opción introducida
 	while (read_line(line)) {
@@ -116,9 +118,6 @@ char *read_line(char *line){
 //a check_internal(), si es así lo ejecuta.
 //Si el comando no es interno, se va a execute_line creando un proceso hijo con fork()
 int execute_line(char *line){
-	
-	signal(SIGINT,ctrlc);	// Cuando llega un CTRL + C, llamamos la funcion apropiada
-	signal(SIGCHLD,reaper);	// Cuando llega la señal SIGCHLD, llamamos al reaper
 
 	char *args[ARGS_SIZE];
 	memset(args,'\0',sizeof(args)); // Limpiamos args para no tener errores
@@ -127,21 +126,19 @@ int execute_line(char *line){
 	parse_args(args, line);
 	
 	if (!check_internal(args)) {
-		//printf("Detectado comando externo!\n");
 		pid_t pid = fork();
 		jobs_list[0].pid = pid;
 
-		int error;	// Eventual codigo de error del proceso hijo
-
-		if (pid == 0) {	// Si el pid es 0, estamos en el proceso hijo
+		if (pid == 0) {	//Si el pid es 0, estamos en el proceso hijo
+			signal(SIGINT,SIG_IGN);		//Cuando llegue CTRL + C no haremos nada en este caso
+			signal(SIGCHLD,SIG_DFL);	//Cuando llegue la señal SIGCHLD haremos su función por defecto
 			is_output_redirection(args);
-			error = execvp(args[0], args);
-			//printf("ERROR en la ejecuciòn del proceso hijo - Codigo %d\n",error);
+			int error = execvp(args[0], args);
+			printf("Error in the execution of the child process - Code %d\n", error);
 			exit(1);
-		}
-		else if (pid > 0) {	// Proceso padre
-							// Empleamos pause() para escuchar señales del hijo
+		} else if (pid > 0) {	//Proceso padre
 			while (jobs_list[0].pid != 0) {
+				//Empleamos pause() para escuchar señales del hijo
 				pause();
 			}
 		}
@@ -162,15 +159,14 @@ void reaper(int signum) {
 
 void ctrlc(int signum) {
 	signal(SIGINT, ctrlc);
-	printf("\nDetectado Control + C\n");
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
 		if (jobs_list[0].pid != shell_pid) {	// Si el proceso en foreground no es el minishell
 			kill(jobs_list[0].pid,SIGTERM);
 		} else if (jobs_list[0].pid == shell_pid) {
-			printf("Señal SIGTERM NO ENVIADA al proceso n.%d porque es el mini shell.\n",jobs_list[0].pid);
+			//printf("Señal SIGTERM NO ENVIADA al proceso n.%d porque es el mini shell.\n",jobs_list[0].pid);
 		}
 	} else {
-		printf("Señal SIGTERM NO ENVIADA porque no hay proceso en foreground.\n");
+		//printf("Señal SIGTERM NO ENVIADA porque no hay proceso en foreground.\n");
 	}
 }
 
