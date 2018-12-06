@@ -15,7 +15,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-#define USE_READLINE 1
+#define USE_READLINE
 
 struct info_process {
 	pid_t pid;
@@ -45,8 +45,6 @@ int main(int argc, char *argv[]) {
 	//Bucle principal del programa donde leemos los comandos de consola
 	//para despues ejecutarlos según la opción introducida
 	while (read_line(line)) {
-		printf("DEBUG READLINE: %s\n",line);
-
 		execute_line(line);
 	}
 	return 0;
@@ -62,36 +60,45 @@ void imprimir_prompt(){
 //Función que imprime el prompt y lee la linea introducida por teclado
 char *read_line(char *line){
 	
-	//Imprimimos el PROMPT en consola
-	imprimir_prompt();
-	
+	//En el caso de utilizar el read_line() se ensamblará
+	//esta parte del if, en el caso contrario se ensamblará el else
 	#ifdef USE_READLINE
-		/* If the buffer has already been allocated,
-		return the memory to the free pool. */
+		//Si hay algo en line_read lo vaciamos y ponemos todo a NULL
 		if (line_read) {
 			free (line_read);
 			line_read = (char *)NULL;
 		}
-
-		/* Get a line from the user. */
-		line_read = readline("");  	//El argumento es la cadena del prompt
-										//Devuelve la línea sin \n. Si se pulsa ^D retorna NULL
-
-		/* If the line has any text in it, save it on the history. */
-		if (line_read && *line_read)  
-			add_history(line_read);
 		
-		strcpy(line,line_read);
+		//Creamos una nueva cadena de 100 carácteres y la formateamos con el 
+		//formato del prompt, después se lo pasamos a readline() como argumento
+		char str[100];
+		char cwd[PATH_MAX];
+		getcwd(cwd, sizeof(cwd));
+		sprintf(str, "%s:~%s%c ", getenv("USER"), cwd, PROMPT);
+		
+		//Leemos la linea introducida por el usuario
+		line_read = readline(str);
+
+		//Si se ha escrito algo se guarda en el historial 
+		//y lo copiamos en line para pasarselo a execute_line()
+		if (line_read && *line_read){
+			add_history(line_read);
+			strcpy(line,line_read);
+		}
+		
 		return line;
 	#else
-		char *ptr = fgets(line, COMMAND_LINE_SIZE, stdin); // leer linea
+		//Imprimimos el PROMPT en consola
+		imprimir_prompt();
+		
+		//Leemos la linea por consola
+		char *ptr = fgets(line, COMMAND_LINE_SIZE, stdin);
 
-		if (!ptr && !feof(stdin)) { // ptr==0 && feof(stdin)==0
-									// si no se incluye la 2ª condición no se consigue salir del shell con Ctrl+D
+		if (!ptr && !feof(stdin)) { //Si no se incluye la 2ª condición no se consigue salir del shell con Ctrl+D	
 			ptr = line; // Si se omite, al pulsar Ctrl+C produce "Violación de segmento (`core' generado)"
 			ptr[0] = 0; // Si se omite esta línea aparece error ejecución ": no se encontró la orden"
 		}
-
+		
 		//Limpiamos el buffer
 		fflush(stdin);
 		
@@ -216,7 +223,6 @@ int check_internal(char **args){
 //Método que cambia al directorio indicado por args[1],
 //en el caso de que args[1] sea NULL envia al HOME.
 int internal_cd(char **args){
-	printf("DEBUG ARGS1: %s\n", args[1]);
 	if (args[1] == NULL || strlen(args[1]) == 0) {
 		chdir(getenv("HOME"));
 		return 1;
