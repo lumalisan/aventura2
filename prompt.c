@@ -107,7 +107,7 @@ char *read_line(char *line){
 		fflush(stdin);
 		
 		//Limpiamos los carácteres delimitadores de line
-		strtok(line, "\t\n\r");
+		strtok(ptr, "\t\n\r");
 		
 		return ptr;
 	#endif
@@ -118,7 +118,6 @@ char *read_line(char *line){
 //a check_internal(), si es así lo ejecuta.
 //Si el comando no es interno, se va a execute_line creando un proceso hijo con fork()
 int execute_line(char *line){
-
 	char *args[ARGS_SIZE];
 	memset(args,'\0',sizeof(args)); // Limpiamos args para no tener errores
 	
@@ -173,12 +172,10 @@ void ctrlc(int signum) {
 
 //Método que separa line en tokens y los guarda en args.
 int parse_args(char **args, char *line) {
-	
 	char *token;
 	int contador = 0;
 	//El carácter delimitador de strtok() será un espacio
 	const char s[2] = " ";
-	
 	//Limpiamos los comentarios de line
 	strtok(line, "#");
 	
@@ -201,6 +198,7 @@ int parse_args(char **args, char *line) {
 //Método que verifica si se trata de un comando interno, 
 //en ese caso lo ejecuta y devuelve 1.
 int check_internal(char **args){
+	// TO FIX: Segmentation fault si ctrl + c sin nada màs en la linea de terminal
 	if (strcmp(args[0], "cd") == 0) {
 		internal_cd(args);
 		return 1;
