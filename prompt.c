@@ -198,7 +198,10 @@ int parse_args(char **args, char *line) {
 //Método que verifica si se trata de un comando interno, 
 //en ese caso lo ejecuta y devuelve 1.
 int check_internal(char **args){
-	// TO FIX: Segmentation fault si ctrl + c sin nada màs en la linea de terminal
+	if (args[0] == NULL) {	// Arregla el segmentation fault en Linux con Ctrl+C y linea vacìa
+		printf("\n");		// Nueva linea antes de volver a imprimir el prompt
+		return 0;			// Indica que no es un comando interno
+	}
 	if (strcmp(args[0], "cd") == 0) {
 		internal_cd(args);
 		return 1;
