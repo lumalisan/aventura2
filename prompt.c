@@ -147,6 +147,7 @@ int execute_line(char *line){
 }
 
 void reaper(int signum) {
+	signal(SIGCHLD,reaper);
 	pid_t pid;
 	while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
 		if(pid == jobs_list[0].pid) {
