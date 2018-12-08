@@ -34,16 +34,23 @@ int internal_source(char **args);
 int internal_jobs(char **args);
 void reaper(int signum);
 void ctrlc(int signum);
+void ctrlz(int signum);
+int is_background(char *line);
 int is_output_redirection(char **args);
+int jobs_list_add(pid_t pid, char status, char *command_line);
+int jobs_list_find(pid_t pid);
+int jobs_list_remove(int pos);
 static struct info_process jobs_list[N_JOBS]; 
 static pid_t shell_pid;
 static char *line_read = (char *)NULL;
+static int n_pids = 0;	// Contador de trabajos no finalizados
 
 
 int main(int argc, char *argv[]) {
 	char line[COMMAND_LINE_SIZE];	
 	signal(SIGINT,ctrlc);	// Cuando llega un CTRL + C, llamamos la funcion apropiada
 	signal(SIGCHLD,reaper);	// Cuando llega la señal SIGCHLD, llamamos al reaper	
+	signal(SIGTSTP,ctrlz);	// Cuando llega un CTRL + Z, llamamos la funcion apropiada
 	//Bucle principal del programa donde leemos los comandos de consola
 	//para despues ejecutarlos según la opción introducida
 	while (read_line(line)) {
@@ -121,21 +128,36 @@ int execute_line(char *line){
 	char *args[ARGS_SIZE];
 	memset(args,'\0',sizeof(args)); // Limpiamos args para no tener errores
 	
-	strcpy(jobs_list[0].command_line, line);  // Copiamos los argumentos no troceados en el primer el. de jobs_list 
+	int is_bg = is_background(line); // Devuelve 1 si hay & al final, 0 si no hay
+
+	if (!is_bg)		// Si no se indica que se tiene que ejecutar en background, entonces se tiene que ej. en foreground
+		strcpy(jobs_list[0].command_line, line);  // Copiamos los argumentos no troceados en el primer el. de jobs_list
+
 	parse_args(args, line);
 	
 	if (!check_internal(args)) {
 		pid_t pid = fork();
-		jobs_list[0].pid = pid;
+		
+		if (!is_bg)
+			jobs_list[0].pid = pid;
 
 		if (pid == 0) {	//Si el pid es 0, estamos en el proceso hijo
 			signal(SIGINT,SIG_IGN);		//Cuando llegue CTRL + C no haremos nada en este caso
+			signal(SIGTSTP,SIG_IGN);	//Cuando llegue CTRL + Z no haremos nada en este caso
 			signal(SIGCHLD,SIG_DFL);	//Cuando llegue la señal SIGCHLD haremos su función por defecto
 			is_output_redirection(args);
-			int error = execvp(args[0], args);
+			int error;
+
+			if (!is_bg)		// Si el proceso tiene que ejecutarse en foreground...
+				error = execvp(args[0], args);
+			else			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
+				error = system(line);
 			printf("Error in the execution of the child process - Code %d\n", error);
 			exit(1);
 		} else if (pid > 0) {	//Proceso padre
+
+			jobs_list_add(pid,'E',line);
+
 			while (jobs_list[0].pid != 0) {
 				//Empleamos pause() para escuchar señales del hijo
 				pause();
@@ -162,6 +184,28 @@ void ctrlc(int signum) {
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
 		if (jobs_list[0].pid != shell_pid) {	// Si el proceso en foreground no es el minishell
 			kill(jobs_list[0].pid,SIGTERM);
+		} else if (jobs_list[0].pid == shell_pid) {
+			//printf("Señal SIGTERM NO ENVIADA al proceso n.%d porque es el mini shell.\n",jobs_list[0].pid);
+		}
+	} else {
+		//printf("Señal SIGTERM NO ENVIADA porque no hay proceso en foreground.\n");
+	}
+}
+
+void ctrlz(int signum) {
+	signal(SIGTSTP, ctrlz);
+	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
+		if (jobs_list[0].pid != shell_pid) {	// Si el proceso en foreground no es el minishell
+			printf("Enviando señal 20 a proceso %d...\n", jobs_list[0].pid);
+			kill(jobs_list[0].pid,SIGTSTP);
+			jobs_list[0].status = 'D';
+			jobs_list_add(jobs_list[0].pid,jobs_list[0].status,jobs_list[0].command_line);	// Añadimos a array de trabajos
+
+			// Reset de los paràmetros del proceso en foreground
+			jobs_list[0].pid = 0;
+			jobs_list[0].status = 'F';
+			strcpy(jobs_list[0].command_line,"");
+
 		} else if (jobs_list[0].pid == shell_pid) {
 			//printf("Señal SIGTERM NO ENVIADA al proceso n.%d porque es el mini shell.\n",jobs_list[0].pid);
 		}
@@ -301,8 +345,65 @@ int internal_source(char **args){
 }
 
 int internal_jobs(char **args){
-	printf("Hacemos JOBS\n");
+	// printf("Hacemos JOBS\n");
+
+	for (int i=1; i<=n_pids; i++) {
+		printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", i, jobs_list[i].pid, jobs_list[i].command_line, jobs_list[i].status);
+	}
 	return 0;
+}
+
+int jobs_list_add(pid_t pid, char status, char *command_line) {
+	if (n_pids < N_JOBS) {
+		jobs_list[n_pids].pid = pid;
+		jobs_list[n_pids].status = status;
+		strcpy(jobs_list[n_pids].command_line,command_line);
+		n_pids++;
+		return 0;
+	}
+	else {
+		return -1;	// Devolvemos valor de error -1 si no se ha podido añadir el nuevo proceso
+	}
+}
+
+int jobs_list_find(pid_t pid) {
+	for (int i=0; i<N_JOBS; i++) {
+		if (jobs_list[i].pid == pid)
+			return i;
+	}
+	return -1;	// Devuelve -1 si no se ha encontrado el proceso
+}
+
+int jobs_list_remove(int pos) {
+	if (pos >= N_JOBS)	// Si pos es màs grande del tamaño del array, devolvemos valor de error -1
+		return -1;
+
+	int last = 0;	// Posiciòn del ùltimo elemento
+		while (jobs_list[last].pid != 0) {
+			last++;
+		}
+
+	// Copiamos los paràmetros del ùltimo elemento a la posiciòn de lo que vamos a borrar
+	jobs_list[pos].pid = jobs_list[last].pid;
+	jobs_list[pos].status = jobs_list[last].status;
+	strcpy(jobs_list[pos].command_line,jobs_list[last].command_line);
+
+	// Limpiamos los paràmetros del ùltimo elemento
+	jobs_list[last].pid = 0;
+	jobs_list[last].status = 'F';
+	strcpy(jobs_list[last].command_line,"");
+
+	return 0;
+}
+
+int is_background(char *line) {
+	int length = strlen(line);
+	if (line[length-1] == '&') {
+		line[length-1] = '\0'; // Substituimos el & por un NULL
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 int is_output_redirection (char **args){
