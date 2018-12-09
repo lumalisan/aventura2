@@ -15,7 +15,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-#define USE_READLINE
+//#define USE_READLINE
 
 struct info_process {
 	pid_t pid;
@@ -42,9 +42,10 @@ int jobs_list_find(pid_t pid);
 int jobs_list_remove(int pos);
 static struct info_process jobs_list[N_JOBS]; 
 static pid_t shell_pid;
-static char *line_read = (char *)NULL;
+#ifdef USE_READLINE
+	static char *line_read = (char *)NULL;
+#endif
 static int n_pids = 0;	// Contador de trabajos no finalizados
-
 
 int main(int argc, char *argv[]) {
 	char line[COMMAND_LINE_SIZE];	
@@ -80,7 +81,7 @@ char *read_line(char *line){
 		
 		//Creamos una nueva cadena de 100 carácteres y la formateamos con el 
 		//formato del prompt, después se lo pasamos a readline() como argumento
-		char str[100];
+		char str[4100];
 		char cwd[PATH_MAX];
 		getcwd(cwd, sizeof(cwd));
 		sprintf(str, "%s:~%s%c ", getenv("USER"), cwd, PROMPT);
@@ -151,17 +152,15 @@ int execute_line(char *line){
 			signal(SIGTSTP,SIG_IGN);	//Cuando llegue CTRL + Z no haremos nada en este caso
 			signal(SIGCHLD,SIG_DFL);	//Cuando llegue la señal SIGCHLD haremos su función por defecto
 			is_output_redirection(args);
-			int error;
 
 			if (!is_bg)	{	// Si el proceso tiene que ejecutarse en foreground...
-				error = execvp(args[0], args);
-				printf("Error in the execution of the child process - Code %d\n", error);
+				execvp(args[0], args);
 				exit(1);
 			}	
 			else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
 				printf("DEBUG: Proceso en background...\n");
 				strtok(line_entera, "&");	// Quitamos el & de la linea sin trocear para evitar problemas
-				error = system(line_entera);
+				system(line_entera);
 				exit(0);
 			}			
 			
@@ -368,8 +367,6 @@ int internal_source(char **args){
 }
 
 int internal_jobs(char **args){
-	// printf("Hacemos JOBS\n");
-
 	for (int i=1; i<=n_pids; i++) {
 		printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", i, jobs_list[i].pid, jobs_list[i].command_line, jobs_list[i].status);
 	}
