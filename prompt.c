@@ -12,6 +12,14 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+//Colors
+#define RED     "\x1b[31m"
+#define GREEN   "\x1b[32m"
+#define YELLOW  "\x1b[33m"
+#define CYAN    "\x1b[36m"
+#define RESET   "\x1b[0m"
+//Bold style
+#define BOLD "\033[1m"
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
@@ -64,7 +72,7 @@ int main(int argc, char *argv[]) {
 void imprimir_prompt(){
 	char cwd[PATH_MAX];
 	getcwd(cwd, sizeof(cwd));
-	printf("%s:~%s%c ", getenv("USER"), cwd, PROMPT);
+	printf(BOLD RED"%s"RESET BOLD":" BOLD YELLOW"~"RESET BOLD GREEN"%s"RESET BOLD CYAN"%c "RESET, getenv("USER"), cwd, PROMPT);
 }
 
 //Función que imprime el prompt y lee la linea introducida por teclado
@@ -81,10 +89,10 @@ char *read_line(char *line){
 		
 		//Creamos una nueva cadena de 100 carácteres y la formateamos con el 
 		//formato del prompt, después se lo pasamos a readline() como argumento
-		char str[4100];
+		char str[4156];
 		char cwd[PATH_MAX];
 		getcwd(cwd, sizeof(cwd));
-		sprintf(str, "%s:~%s%c ", getenv("USER"), cwd, PROMPT);
+		sprintf(str, BOLD RED"%s"RESET BOLD":" BOLD YELLOW"~"RESET BOLD GREEN"%s"RESET BOLD CYAN"%c "RESET, getenv("USER"), cwd, PROMPT);
 		
 		//Leemos la linea introducida por el usuario
 		line_read = readline(str);
@@ -244,7 +252,35 @@ int parse_args(char **args, char *line) {
 	const char s[2] = " ";
 	//Limpiamos los comentarios de line
 	strtok(line, "#");
-	
+
+	//Implementando cd avanzado
+	if (strchr(line,'"')) {
+		char *path = strchr(line,'"');
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\"";
+		args[contador] = strtok(path, s);
+		return contador;
+	} else if(strchr(line,'\'')){
+		char *path = strchr(line,'\'');
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\'";
+		args[contador] = strtok(path, s);
+		return contador;
+	} else if (strchr(line,'\\')){
+		//TODO this is not working
+		char *path = strchr(line,'\\');
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\\";
+		args[contador] = strtok(path, s);
+		return contador;
+	}
+
 	//Leemos el primer token
 	token = strtok(line, s);
 	//Bucle while que lee y guarda los tokens en args
@@ -303,6 +339,12 @@ int internal_cd(char **args){
 //con la función strtok().
 int internal_export(char **args){
 
+
+
+	//TODO (se produce violación de segmento cuando se llama a export)
+
+
+
 	if (args[1] == NULL) {
 		printf("Syntax Error. Use: export Name=Value\n");
 		return 1;
@@ -348,19 +390,20 @@ int internal_source(char **args){
 		printf("Syntax Error. Use: source <filename>\n");
 		return 1;
 	} else {
-	FILE *file = fopen(args[1],"r"); // abrimos el fichero pasado como argumento en modo solo lectura
+
+		//TODO (problema al ejecutar source con sleep)
+
+		FILE *file = fopen(args[1],"r"); // abrimos el fichero pasado como argumento en modo solo lectura
 		if (file) {
 			char readcommand[COMMAND_LINE_SIZE];
-
 			while (fgets(readcommand, COMMAND_LINE_SIZE, file)) {
 				fflush(file);
 				execute_line(readcommand);
 			}
-
-		fclose(file); // cerramos el fichero
-		return 0;
-
+			fclose(file); // cerramos el fichero
+			return 0;
 		} else {
+			printf("File not found\n");
 			return 1;
 		}
 	}
