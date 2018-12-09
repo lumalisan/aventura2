@@ -15,7 +15,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-//#define USE_READLINE
+#define USE_READLINE
 
 struct info_process {
 	pid_t pid;
@@ -35,7 +35,7 @@ int internal_jobs(char **args);
 void reaper(int signum);
 void ctrlc(int signum);
 void ctrlz(int signum);
-int is_background(char *line);
+int is_background(char **args);
 int is_output_redirection(char **args);
 int jobs_list_add(pid_t pid, char status, char *command_line);
 int jobs_list_find(pid_t pid);
@@ -126,14 +126,19 @@ char *read_line(char *line){
 //Si el comando no es interno, se va a execute_line creando un proceso hijo con fork()
 int execute_line(char *line){
 	char *args[ARGS_SIZE];
+	char line_entera[COMMAND_LINE_SIZE];
+	strcpy(line_entera,line);
 	memset(args,'\0',sizeof(args)); // Limpiamos args para no tener errores
 	
-	int is_bg = is_background(line); // Devuelve 1 si hay & al final, 0 si no hay
+	parse_args(args, line);
+	int is_bg = is_background(args); // Devuelve 1 si hay & al final, 0 si no hay
+	
+	//printf("DEBUG IS BG: %d\n",is_bg);
+
 
 	if (!is_bg)		// Si no se indica que se tiene que ejecutar en background, entonces se tiene que ej. en foreground
 		strcpy(jobs_list[0].command_line, line);  // Copiamos los argumentos no troceados en el primer el. de jobs_list
 
-	parse_args(args, line);
 	
 	if (!check_internal(args)) {
 		pid_t pid = fork();
@@ -148,15 +153,25 @@ int execute_line(char *line){
 			is_output_redirection(args);
 			int error;
 
-			if (!is_bg)		// Si el proceso tiene que ejecutarse en foreground...
+			if (!is_bg)	{	// Si el proceso tiene que ejecutarse en foreground...
 				error = execvp(args[0], args);
-			else			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
-				error = system(line);
-			printf("Error in the execution of the child process - Code %d\n", error);
-			exit(1);
+				printf("Error in the execution of the child process - Code %d\n", error);
+				exit(1);
+			}	
+			else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
+				printf("DEBUG: Proceso en background...\n");
+				strtok(line_entera, "&");	// Quitamos el & de la linea sin trocear para evitar problemas
+				error = system(line_entera);
+				exit(0);
+			}			
+			
 		} else if (pid > 0) {	//Proceso padre
 
-			jobs_list_add(pid,'E',line);
+			if (is_bg == 1) {
+				printf("Añadiendo proceso %d a lista jobs...\n",pid);
+				jobs_list_add(pid,'E',line);
+				printf("DEBUG N_PIDS: %d\n",n_pids);
+			}
 
 			while (jobs_list[0].pid != 0) {
 				//Empleamos pause() para escuchar señales del hijo
@@ -175,6 +190,14 @@ void reaper(int signum) {
 			jobs_list[0].pid = 0;
 			jobs_list[0].status = 'F';
 			strcpy(jobs_list[0].command_line,"");
+		} else {
+			int pos = jobs_list_find(pid);
+			if (pos != -1) {	// Si el proceso es en background
+				fprintf(stderr, "Proceso en background con pid %d (%s) acabado\n",pid, jobs_list[pos].command_line);
+				//perror("Test error:");
+				jobs_list_remove(pos);
+				imprimir_prompt();
+		}
 		}
 	}
 }
@@ -355,9 +378,9 @@ int internal_jobs(char **args){
 
 int jobs_list_add(pid_t pid, char status, char *command_line) {
 	if (n_pids < N_JOBS) {
-		jobs_list[n_pids].pid = pid;
-		jobs_list[n_pids].status = status;
-		strcpy(jobs_list[n_pids].command_line,command_line);
+		jobs_list[n_pids+1].pid = pid;
+		jobs_list[n_pids+1].status = status;
+		strcpy(jobs_list[n_pids+1].command_line,command_line);
 		n_pids++;
 		return 0;
 	}
@@ -392,18 +415,21 @@ int jobs_list_remove(int pos) {
 	jobs_list[last].pid = 0;
 	jobs_list[last].status = 'F';
 	strcpy(jobs_list[last].command_line,"");
+	n_pids--;
 
 	return 0;
 }
 
-int is_background(char *line) {
-	int length = strlen(line);
-	if (line[length-1] == '&') {
-		line[length-1] = '\0'; // Substituimos el & por un NULL
-		return 1;
-	} else {
-		return 0;
+int is_background(char **args) {
+	int i = 0;
+	while (args[i] != NULL) {
+		if (strcmp(args[i],"&") == 0) {
+				args[i] = NULL;
+				return 1;	// Si encontramos el &, devolvemos 1
+		}	
+		i++;
 	}
+	return 0;	// Si no, devolvemos 0
 }
 
 int is_output_redirection (char **args){
