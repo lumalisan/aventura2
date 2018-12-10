@@ -169,7 +169,8 @@ int execute_line(char *line){
 						exit(1);
 					}
 				#endif
-				printf("-terminal: %s: command not found\n", args[0]);
+				char *error = malloc(sizeof(error));
+				perror("Error");
 				exit(1);
 			} else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
 				strtok(line_entera, "&");	// Quitamos el & de la linea sin trocear para evitar problemas
@@ -180,9 +181,8 @@ int execute_line(char *line){
 		} else if (pid > 0) {	//Proceso padre
 
 			if (is_bg == 1) {
-				printf("Añadiendo proceso %d a lista jobs...\n",pid);
+				fprintf(stderr,"Añadiendo proceso %d a lista jobs...\n",pid);
 				jobs_list_add(pid,'E',line);
-				printf("DEBUG N_PIDS: %d\n",n_pids);
 			}
 
 			while (jobs_list[0].pid != 0) {
@@ -219,7 +219,7 @@ void ctrlc(int signum) {
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
 		if (jobs_list[0].pid != shell_pid && strcmp(jobs_list[0].command_line,"./my_shell") != 0) {	// Si el proceso en foreground no es el minishell
 			kill(jobs_list[0].pid,SIGTERM);
-			//printf("DEBUG - Matado el proceso %d con CTRL+C\n",jobs_list[0].pid);
+			fprintf(stderr,"Enviando señal 15 a proceso %d...\n", jobs_list[0].pid);
 		} else if (jobs_list[0].pid == shell_pid) {
 			//printf("Señal SIGTERM NO ENVIADA al proceso n.%d porque es el mini shell.\n",jobs_list[0].pid);
 		}
@@ -232,7 +232,7 @@ void ctrlz(int signum) {
 	signal(SIGTSTP, ctrlz);
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
 		if (jobs_list[0].pid != shell_pid) {	// Si el proceso en foreground no es el minishell
-			printf("Enviando señal 20 a proceso %d...\n", jobs_list[0].pid);
+			fprintf(stderr,"Enviando señal 20 a proceso %d...\n", jobs_list[0].pid);
 			kill(jobs_list[0].pid,SIGTSTP);
 			jobs_list[0].status = 'D';
 			jobs_list_add(jobs_list[0].pid,jobs_list[0].status,jobs_list[0].command_line);	// Añadimos a array de trabajos
@@ -277,7 +277,6 @@ int parse_args(char **args, char *line) {
 		args[contador] = strtok(path, s);
 		return contador;
 	} else if (strchr(line,'\\')){
-		//TODO this is not working
 		char *path = strchr(line,'\\');
 		token = strtok(line, s);
 		args[contador] = token;
@@ -335,7 +334,7 @@ int internal_cd(char **args){
 		chdir(getenv("HOME"));
 		return 1;
 	} else if (chdir(args[1]) == -1) {
-		printf("Directory %s not found\n", args[1]);
+		perror("Error CD");
 	}
 	return 0;
 }
@@ -345,13 +344,13 @@ int internal_cd(char **args){
 //con la función strtok().
 int internal_export(char **args){
 	if (args[1] == NULL) {
-		printf("Syntax Error. Use: export Name=Value\n");
+		fprintf(stderr,"Syntax Error. Use: export Name=Value\n");
 		return 1;
 	}
 	const char igual = '=';
 	char *pos = strchr(args[1], igual); // Lo que hay después del primer =
 	if (pos == NULL) {
-		printf("Syntax Error. Use: export Name=Value\n");
+		fprintf(stderr,"Syntax Error. Use: export Name=Value\n");
 		return 1;
 	}
 	char *token = strtok(args[1], "=");
@@ -365,7 +364,7 @@ int internal_export(char **args){
 		if (getenv(nombre) != NULL) {
 			setenv(nombre, valor, 1);
 		} else {
-			printf("Syntax Error. Introduce a valid name\n");
+			fprintf(stderr,"Syntax Error. Introduce a valid name\n");
 		}
 	}
 	return 0;
@@ -383,7 +382,7 @@ int internal_source(char **args){
 
 	// stream = fopen("nombrefile", "r")
 	if (args[1] == NULL) {
-		printf("Syntax Error. Use: source <filename>\n");
+		fprintf(stderr,"Syntax Error. Use: source <filename>\n");
 		return 1;
 	} else {
 		FILE *file = fopen(args[1],"r"); // abrimos el fichero pasado como argumento en modo solo lectura
@@ -397,7 +396,7 @@ int internal_source(char **args){
 			fclose(file); // cerramos el fichero
 			return 0;
 		} else {
-			printf("File not found\n");
+			perror("Error Source");
 			return 1;
 		}
 	}
@@ -478,7 +477,7 @@ int is_output_redirection (char **args){
 				args[i+1] = NULL;
 				return 1;
 			} else {
-				printf("Syntax Error. Use: command > file\n");
+				fprintf(stderr,"Syntax Error. Use: command > file\n");
 			}
 		}	
 		i++;
