@@ -48,6 +48,8 @@ int is_output_redirection(char **args);
 int jobs_list_add(pid_t pid, char status, char *command_line);
 int jobs_list_find(pid_t pid);
 int jobs_list_remove(int pos);
+int internal_fg(char **args);
+int internal_bg(char **args);
 static struct info_process jobs_list[N_JOBS]; 
 static pid_t shell_pid;
 #ifdef USE_READLINE
@@ -182,7 +184,7 @@ int execute_line(char *line){
 
 			if (is_bg == 1) {
 				fprintf(stderr,"Añadiendo proceso %d a lista jobs...\n",pid);
-				jobs_list_add(pid,'E',line);
+				jobs_list_add(pid,'E',line_entera);
 			}
 
 			while (jobs_list[0].pid != 0) {
@@ -194,6 +196,8 @@ int execute_line(char *line){
 	return 1;
 }
 
+//Funcion que espera a que los hijos acaben y 
+//limpia la posición 0 de jobs_list
 void reaper(int signum) {
 	signal(SIGCHLD,reaper);
 	pid_t pid;
@@ -213,9 +217,10 @@ void reaper(int signum) {
 	}
 }
 
+//Funcion que es llamada cuando hacemos Ctrl+C y acaba con el proceso hijo 
+//a no ser que el proceso hijo también sea el shell
 void ctrlc(int signum) {
 	signal(SIGINT, ctrlc);
-	
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
 		if (jobs_list[0].pid != shell_pid && strcmp(jobs_list[0].command_line,"./my_shell") != 0) {	// Si el proceso en foreground no es el minishell
 			kill(jobs_list[0].pid,SIGTERM);
@@ -228,6 +233,7 @@ void ctrlc(int signum) {
 	}
 }
 
+//Funcion que envia un proceso al background
 void ctrlz(int signum) {
 	signal(SIGTSTP, ctrlz);
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
@@ -277,12 +283,12 @@ int parse_args(char **args, char *line) {
 		args[contador] = strtok(path, s);
 		return contador;
 	} else if (strchr(line,'\\')){
-		char *path = strchr(line,'\\');
+		char *aux = strchr(line,'\\');
 		token = strtok(line, s);
 		args[contador] = token;
 		contador++;
 		const char s[2] = "\\";
-		args[contador] = strtok(path, s);
+		args[contador] = strtok(aux, s);
 		return contador;
 	}
 
@@ -308,8 +314,7 @@ int check_internal(char **args){
 	if (args[0] == NULL) {	// Arregla el segmentation fault en Linux con Ctrl+C y linea vacìa
 		printf("\n");		// Nueva linea antes de volver a imprimir el prompt
 		return 0;			// Indica que no es un comando interno
-	}
-	if (strcmp(args[0], "cd") == 0) {
+	} else if (strcmp(args[0], "cd") == 0) {
 		internal_cd(args);
 		return 1;
 	} else if (strcmp(args[0], "export") == 0) {
@@ -323,6 +328,12 @@ int check_internal(char **args){
 		return 1;
 	} else if (strcmp(args[0], "exit") == 0) {
 		exit(0);
+	} else if (strcmp(args[0], "fg") == 0) {
+		internal_fg(args);
+		return 1;
+	} else if (strcmp(args[0], "bg") == 0) {
+		internal_bg(args);
+		return 1;
 	}
 	return 0;
 }
@@ -356,9 +367,8 @@ int internal_export(char **args){
 	char *token = strtok(args[1], "=");
 	char *nombre = token;
 	char *valor = malloc(sizeof(valor));
-	char *inutil = pos;
-	inutil++;
-	strcpy(valor,inutil);
+	pos++;
+	strcpy(valor,pos);
 	
 	if (valor != NULL) {
 		if (getenv(nombre) != NULL) {
@@ -370,17 +380,9 @@ int internal_export(char **args){
 	return 0;
 }
 
+// Abre un fichero y ejecuta el comando presente 
+//en cada linea enviandolo al executeline
 int internal_source(char **args){
-	// Abre un fichero y ejecuta el comando presente en cada linea
-	// enviandolo al executeline
-
-	// Se usa fgets()
-	// char *fgets(char *str, int n, FILE *stream)
-	// con: str: donde se almacena la string leida
-	//      n: numero maximo de caracteres a leer
-	//      stream: puntero al stream de datos
-
-	// stream = fopen("nombrefile", "r")
 	if (args[1] == NULL) {
 		fprintf(stderr,"Syntax Error. Use: source <filename>\n");
 		return 1;
@@ -402,6 +404,7 @@ int internal_source(char **args){
 	}
 }
 
+//Funcion que muestra por pantalla todos los procesos en background
 int internal_jobs(char **args){
 	for (int i=1; i<=n_pids; i++) {
 		printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", i, jobs_list[i].pid, jobs_list[i].command_line, jobs_list[i].status);
@@ -409,6 +412,7 @@ int internal_jobs(char **args){
 	return 0;
 }
 
+//Añade un proceso a jobs_list
 int jobs_list_add(pid_t pid, char status, char *command_line) {
 	if (n_pids < N_JOBS) {
 		jobs_list[n_pids+1].pid = pid;
@@ -422,6 +426,7 @@ int jobs_list_add(pid_t pid, char status, char *command_line) {
 	}
 }
 
+//Busca un proceso en jobs_list
 int jobs_list_find(pid_t pid) {
 	for (int i=0; i<N_JOBS; i++) {
 		if (jobs_list[i].pid == pid)
@@ -430,6 +435,7 @@ int jobs_list_find(pid_t pid) {
 	return -1;	// Devuelve -1 si no se ha encontrado el proceso
 }
 
+//Elimina un proceso del jobs_list
 int jobs_list_remove(int pos) {
 	if (pos >= N_JOBS)	// Si pos es màs grande del tamaño del array, devolvemos valor de error -1
 		return -1;
@@ -453,6 +459,8 @@ int jobs_list_remove(int pos) {
 	return 0;
 }
 
+// Devuelve 1 si el usuario ha indicado que quiere ejecutar el comando en background
+// (o sea, si hay un & como ultimo token)
 int is_background(char **args) {
 	int i = 0;
 	while (args[i] != NULL) {
@@ -465,6 +473,9 @@ int is_background(char **args) {
 	return 0;	// Si no, devolvemos 0
 }
 
+// Recorremos los tokens buscando un '>'. Si lo encontramos, y si se
+// define un nombre de fichero en el token siguiente, redirigimos el stdout
+// a ese fichero durante la ejecuciòn de ese comando.
 int is_output_redirection (char **args){
 	int i = 0;
 	while (args[i] != NULL) {
@@ -483,4 +494,63 @@ int is_output_redirection (char **args){
 		i++;
 	}
 	return 0;
+}
+
+int internal_fg(char **args) {
+	if (args[1] == NULL) {	// Si el numero de trabajo no està especificado, error y salir
+		fprintf(stderr,"No job number specified\n");
+		return 0;
+	}
+	char *temp = malloc(sizeof(temp));
+	strcpy(temp,args[1]);
+	if (strchr(temp,'%'))	// Si hay un %, lo quitamos avanzando el puntero
+		temp++;
+	
+	int pos = atoi(temp);	// Convertimos el num. de trabajo a int
+	if (pos > n_pids || pos == 0) {	// Si el num. no es valido, error y salir
+		fprintf(stderr,"Job %d not found\n",pos);
+		return 0;
+	}
+	if (jobs_list[pos].status == 'D') {
+		printf("Enviando la señal SIGCONT al proceso %d\n",jobs_list[pos].pid);
+		kill(jobs_list[pos].pid, SIGCONT);
+	}
+	jobs_list[0].status = 'E';
+	jobs_list[0].pid = jobs_list[pos].pid;	// Pasamos los paràmetros del proceso en bg a foreground
+	strcpy(jobs_list[0].command_line, jobs_list[pos].command_line);
+	strcpy(jobs_list[0].command_line, strtok(jobs_list[0].command_line, "&"));	// Quitamos el &
+	jobs_list_remove(pos);	// Eliminamoos los parametros de bg después de la copia
+	
+	printf("Comando: %s\n", jobs_list[0].command_line);
+	while (jobs_list[0].pid != 0) {
+		pause();
+	}
+	return 1;
+}
+
+int internal_bg(char **args) {
+	if (args[1] == NULL) {	// Si el numero de trabajo no està especificado, error y salir
+		fprintf(stderr,"No job number specified\n");
+		return 0;
+	}
+	char *temp = malloc(sizeof(temp));
+	strcpy(temp,args[1]);
+	if (strchr(temp,'%'))
+		temp++;
+	
+	int pos = atoi(temp);	// Convertimos el char* a int
+	if (pos > n_pids || pos == 0) {	// Si el num. no es valido, error y salir
+		fprintf(stderr,"Job %d not found\n",pos);
+		return 0;
+	} else if (jobs_list[pos].status == 'E') {
+		fprintf(stderr,"This process is already in background!\n");
+		return 0;
+	} else {
+		jobs_list[pos].status = 'E';
+		strcat(jobs_list[pos].command_line, " &");
+		printf("Enviando la señal SIGCONT al proceso %d\n",jobs_list[pos].pid);
+		kill(jobs_list[pos].pid, SIGCONT);
+		printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", pos, jobs_list[pos].pid, jobs_list[pos].command_line, jobs_list[pos].status);
+		return 1;
+	}
 }
