@@ -63,7 +63,6 @@ int main(int argc, char *argv[]) {
 	//Bucle principal del programa donde leemos los comandos de consola
 	//para despues ejecutarlos según la opción introducida
 	shell_pid = getpid();
-	printf("DEBUG SHELL PID: %d\n", shell_pid);
 	while (read_line(line)) {
 		execute_line(line);
 	}
