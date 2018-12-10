@@ -23,7 +23,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-//#define USE_READLINE
+#define USE_READLINE
 
 struct info_process {
 	pid_t pid;
@@ -140,13 +140,11 @@ int execute_line(char *line){
 	memset(args,'\0',sizeof(args)); // Limpiamos args para no tener errores
 	
 	parse_args(args, line);
-	int is_bg = is_background(args); // Devuelve 1 si hay & al final, 0 si no hay
-	
-	//printf("DEBUG IS BG: %d\n",is_bg);
 
+	int is_bg = is_background(args); // Devuelve 1 si hay & al final, 0 si no hay
 
 	if (!is_bg)		// Si no se indica que se tiene que ejecutar en background, entonces se tiene que ej. en foreground
-		strcpy(jobs_list[0].command_line, line);  // Copiamos los argumentos no troceados en el primer el. de jobs_list
+		strcpy(jobs_list[0].command_line, line_entera);  // Copiamos los argumentos no troceados en el primer el. de jobs_list
 
 	
 	if (!check_internal(args)) {
@@ -159,14 +157,20 @@ int execute_line(char *line){
 			signal(SIGINT,SIG_IGN);		//Cuando llegue CTRL + C no haremos nada en este caso
 			signal(SIGTSTP,SIG_IGN);	//Cuando llegue CTRL + Z no haremos nada en este caso
 			signal(SIGCHLD,SIG_DFL);	//Cuando llegue la señal SIGCHLD haremos su función por defecto
+			
 			is_output_redirection(args);
 
 			if (!is_bg)	{	// Si el proceso tiene que ejecutarse en foreground...
 				execvp(args[0], args);
+				#ifdef USE_READLINE
+				#else
+				if (strcmp(args[0], "\n") || strcmp(args[0], "\t") || strcmp(args[0], "\r")) {
+					exit(1);
+				}
+				#endif
+				printf("-terminal: %s: command not found\n", args[0]);
 				exit(1);
-			}	
-			else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
-				printf("DEBUG: Proceso en background...\n");
+			} else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
 				strtok(line_entera, "&");	// Quitamos el & de la linea sin trocear para evitar problemas
 				system(line_entera);
 				exit(0);
@@ -203,8 +207,8 @@ void reaper(int signum) {
 				fprintf(stderr, "Proceso en background con pid %d (%s) acabado\n",pid, jobs_list[pos].command_line);
 				//perror("Test error:");
 				jobs_list_remove(pos);
-				imprimir_prompt();
-		}
+				//imprimir_prompt();
+				}
 		}
 	}
 }
@@ -338,13 +342,6 @@ int internal_cd(char **args){
 //después de un igual (=), para ello descomponemos el argumento
 //con la función strtok().
 int internal_export(char **args){
-
-
-
-	//TODO (se produce violación de segmento cuando se llama a export)
-
-
-
 	if (args[1] == NULL) {
 		printf("Syntax Error. Use: export Name=Value\n");
 		return 1;
@@ -357,16 +354,13 @@ int internal_export(char **args){
 	}
 	char *token = strtok(args[1], "=");
 	char *nombre = token;
-	char *valor = NULL;
-	(*pos)++;
-	strcpy(valor,pos);
-
-	printf("Name: %s\n", nombre);
-	printf("Value: %s\n", valor);
+	char *valor = malloc(sizeof(valor));
+	char *inutil = pos;
+	inutil++;
+	strcpy(valor,inutil);
+	
 	if (valor != NULL) {
 		if (getenv(nombre) != NULL) {
-			printf("Antiguo valor para %s: %s\n", nombre, getenv(nombre));
-			printf("Nuevo valor para %s: %s\n", nombre, valor);
 			setenv(nombre, valor, 1);
 		} else {
 			printf("Syntax Error. Introduce a valid name\n");
@@ -390,14 +384,12 @@ int internal_source(char **args){
 		printf("Syntax Error. Use: source <filename>\n");
 		return 1;
 	} else {
-
-		//TODO (problema al ejecutar source con sleep)
-
 		FILE *file = fopen(args[1],"r"); // abrimos el fichero pasado como argumento en modo solo lectura
 		if (file) {
 			char readcommand[COMMAND_LINE_SIZE];
 			while (fgets(readcommand, COMMAND_LINE_SIZE, file)) {
 				fflush(file);
+				strtok(readcommand, "\t\n\r");
 				execute_line(readcommand);
 			}
 			fclose(file); // cerramos el fichero
