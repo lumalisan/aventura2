@@ -182,7 +182,6 @@ int execute_line(char *line){
 			if (is_bg == 1) {
 				printf("Añadiendo proceso %d a lista jobs...\n",pid);
 				jobs_list_add(pid,'E',line);
-				//printf("DEBUG N_PIDS: %d\n",n_pids);
 			}
 
 			while (jobs_list[0].pid != 0) {
