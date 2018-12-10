@@ -279,13 +279,17 @@ int parse_args(char **args, char *line) {
 		args[contador] = strtok(path, s);
 		return contador;
 	} else if (strchr(line,'\\')){
-		char *path = strchr(line,'\\');
-		token = strtok(line, s);
-		args[contador] = token;
-		contador++;
-		const char s[2] = "\\";
-		args[contador] = strtok(path, s);
-		return contador;
+		char *aux = strchr(line,'\\');
+		if (aux[1] == ' ') {
+			printf("entramos");
+			char *path ;
+			token = strtok(line, s);
+			args[contador] = token;
+			contador++;
+			const char s[2] = "\\";
+			args[contador] = strtok(path, s);
+			return contador;
+		}
 	}
 
 	//Leemos el primer token
@@ -310,8 +314,7 @@ int check_internal(char **args){
 	if (args[0] == NULL) {	// Arregla el segmentation fault en Linux con Ctrl+C y linea vacìa
 		printf("\n");		// Nueva linea antes de volver a imprimir el prompt
 		return 0;			// Indica que no es un comando interno
-	}
-	if (strcmp(args[0], "cd") == 0) {
+	} else if (strcmp(args[0], "cd") == 0) {
 		internal_cd(args);
 		return 1;
 	} else if (strcmp(args[0], "export") == 0) {
@@ -364,9 +367,8 @@ int internal_export(char **args){
 	char *token = strtok(args[1], "=");
 	char *nombre = token;
 	char *valor = malloc(sizeof(valor));
-	char *inutil = pos;
-	inutil++;
-	strcpy(valor,inutil);
+	pos++;
+	strcpy(valor,pos);
 	
 	if (valor != NULL) {
 		if (getenv(nombre) != NULL) {
@@ -536,6 +538,8 @@ int internal_bg(char **args) {
 		temp++;
 	
 	int pos = atoi(temp);	// Convertimos el char* a int
+	// Convertimos el char* a int
+	int pos = atoi(args[1]);
 	if (pos > n_pids || pos == 0) {
 		fprintf(stderr,"Job %d not found\n",pos);
 		return 0;
