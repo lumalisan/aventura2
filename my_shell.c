@@ -48,6 +48,8 @@ int is_output_redirection(char **args);
 int jobs_list_add(pid_t pid, char status, char *command_line);
 int jobs_list_find(pid_t pid);
 int jobs_list_remove(int pos);
+int internal_fg(char **args);
+int internal_bg(char **args);
 static struct info_process jobs_list[N_JOBS]; 
 static pid_t shell_pid;
 #ifdef USE_READLINE
@@ -483,4 +485,25 @@ int is_output_redirection (char **args){
 		i++;
 	}
 	return 0;
+}
+
+int internal_fg(char **args) {
+	return 0;
+}
+
+int internal_bg(char **args) {
+	int p = atoi(args[1]);
+	if (p > n_pids || p == 0) {
+		perror("No existe este trabajo");
+		return 0;
+	}
+	if (jobs_list[p].status == 'E') {
+		perror("El trabajo ya esta en segundo plano");
+		return 0;
+	}
+	strcat(jobs_list[p].command_line, " &");
+	jobs_list[p].status = 'E';
+	kill(jobs_list[p].pid, SIGCONT);
+	printf("[%d]\t%c\t%d\t%s\n", p, jobs_list[p].status, jobs_list[p].pid, jobs_list[p].command_line);
+	return 1;
 }
