@@ -283,6 +283,7 @@ int parse_args(char **args, char *line) {
 		args[contador] = strtok(path, s);
 		return contador;
 	} else if (strchr(line,'\\')){
+		/*
 		char *aux = strchr(line,'\\');
 		if (aux[1] == ' ') {
 			printf("entramos");
@@ -294,6 +295,32 @@ int parse_args(char **args, char *line) {
 			args[contador] = strtok(path, s);
 			return contador;
 		}
+		*/
+
+		//Leemos el primer token
+		token = strtok(line, s);
+		//Bucle while que lee y guarda los tokens en args
+		while(token != NULL) {
+			args[contador] = token;
+			contador++;
+			token = strtok(NULL, s);
+		}
+		//Si contador es 1 limpiamos el siguiente args para
+		//evitar errores posteriores.
+		if (contador == 1) {
+			args[1] = NULL;
+		}	
+		
+		for (int i=0; i<contador; i++) {
+			if (strchr(args[i],'\\')) {
+				if (args[i+1] != NULL) {
+					strcat(args[i],args[i+1]);
+					strcpy(args[i+1],"");
+				}
+			}
+		}
+
+		return contador;
 	}
 
 	//Leemos el primer token
