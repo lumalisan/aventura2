@@ -494,20 +494,31 @@ int is_output_redirection (char **args){
 }
 
 int internal_fg(char **args) {
-	int p = atoi(args[1]);
-	if (p > n_pids || p == 0) {
-		perror("No existe ese trabajo");
+	if (args[1] == NULL) {
+		fprintf(stderr,"No job number specified\n");
 		return 0;
 	}
-	if (jobs_list[p].status == 'D') {
-		kill(jobs_list[p].pid, SIGCONT);
+	char *temp = malloc(sizeof(temp));
+	strcpy(temp,args[1]);
+	if (strchr(temp,'%'))
+		temp++;
+	
+	int pos = atoi(temp);
+	if (pos > n_pids || pos == 0) {
+		fprintf(stderr,"Job %d not found\n",pos);
+		return 0;
 	}
-	jobs_list[0].pid = jobs_list[p].pid;
+	if (jobs_list[pos].status == 'D') {
+		printf("Enviando la señal SIGCONT al proceso %d\n",jobs_list[pos].pid);
+		kill(jobs_list[pos].pid, SIGCONT);
+	}
 	jobs_list[0].status = 'E';
-	strcpy(jobs_list[0].command_line, jobs_list[p].command_line);
-	jobs_list_remove(p);
-	strcpy(jobs_list[0].command_line, strtok(jobs_list[0].command_line, "&"));
-	printf("%s\n", jobs_list[0].command_line);
+	jobs_list[0].pid = jobs_list[pos].pid;
+	strcpy(jobs_list[0].command_line, jobs_list[pos].command_line);
+	strcpy(jobs_list[0].command_line, strtok(jobs_list[0].command_line, "&"));	// Quitamos el &
+	jobs_list_remove(pos);
+	
+	printf("Comando: %s\n", jobs_list[0].command_line);
 	while (jobs_list[0].pid != 0) {
 		pause();
 	}
@@ -515,7 +526,16 @@ int internal_fg(char **args) {
 }
 
 int internal_bg(char **args) {
-	int pos = atoi(args[1]);	// Convertimos el char* a int
+	if (args[1] == NULL) {
+		fprintf(stderr,"No job number specified\n");
+		return 0;
+	}
+	char *temp = malloc(sizeof(temp));
+	strcpy(temp,args[1]);
+	if (strchr(temp,'%'))
+		temp++;
+	
+	int pos = atoi(temp);	// Convertimos el char* a int
 	if (pos > n_pids || pos == 0) {
 		fprintf(stderr,"Job %d not found\n",pos);
 		return 0;
