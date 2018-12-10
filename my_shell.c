@@ -498,7 +498,7 @@ int internal_bg(char **args) {
 		return 0;
 	}
 	if (jobs_list[pos].status == 'E') {
-		fprintf("This process is already in background!\n");
+		fprintf(stderr,"This process is already in background!\n");
 		return 0;
 	}
 	jobs_list[pos].status = 'E';
