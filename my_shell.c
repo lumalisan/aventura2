@@ -12,6 +12,14 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+//Colors
+#define RED     "\x1b[31m"
+#define GREEN   "\x1b[32m"
+#define YELLOW  "\x1b[33m"
+#define CYAN    "\x1b[36m"
+#define RESET   "\x1b[0m"
+//Bold style
+#define BOLD "\033[1m"
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
@@ -54,6 +62,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGTSTP,ctrlz);	// Cuando llega un CTRL + Z, llamamos la funcion apropiada
 	//Bucle principal del programa donde leemos los comandos de consola
 	//para despues ejecutarlos según la opción introducida
+	shell_pid = getpid();
 	while (read_line(line)) {
 		execute_line(line);
 	}
@@ -64,7 +73,7 @@ int main(int argc, char *argv[]) {
 void imprimir_prompt(){
 	char cwd[PATH_MAX];
 	getcwd(cwd, sizeof(cwd));
-	printf("%s:~%s%c ", getenv("USER"), cwd, PROMPT);
+	printf(BOLD RED"%s"RESET BOLD":" BOLD YELLOW"~"RESET BOLD GREEN"%s"RESET BOLD CYAN"%c "RESET, getenv("USER"), cwd, PROMPT);
 }
 
 //Función que imprime el prompt y lee la linea introducida por teclado
@@ -81,10 +90,10 @@ char *read_line(char *line){
 		
 		//Creamos una nueva cadena de 100 carácteres y la formateamos con el 
 		//formato del prompt, después se lo pasamos a readline() como argumento
-		char str[4100];
+		char str[4156];
 		char cwd[PATH_MAX];
 		getcwd(cwd, sizeof(cwd));
-		sprintf(str, "%s:~%s%c ", getenv("USER"), cwd, PROMPT);
+		sprintf(str, BOLD RED"%s"RESET BOLD":" BOLD YELLOW"~"RESET BOLD GREEN"%s"RESET BOLD CYAN"%c "RESET, getenv("USER"), cwd, PROMPT);
 		
 		//Leemos la linea introducida por el usuario
 		line_read = readline(str);
@@ -132,13 +141,11 @@ int execute_line(char *line){
 	memset(args,'\0',sizeof(args)); // Limpiamos args para no tener errores
 	
 	parse_args(args, line);
-	int is_bg = is_background(args); // Devuelve 1 si hay & al final, 0 si no hay
-	
-	//printf("DEBUG IS BG: %d\n",is_bg);
 
+	int is_bg = is_background(args); // Devuelve 1 si hay & al final, 0 si no hay
 
 	if (!is_bg)		// Si no se indica que se tiene que ejecutar en background, entonces se tiene que ej. en foreground
-		strcpy(jobs_list[0].command_line, line);  // Copiamos los argumentos no troceados en el primer el. de jobs_list
+		strcpy(jobs_list[0].command_line, line_entera);  // Copiamos los argumentos no troceados en el primer el. de jobs_list
 
 	
 	if (!check_internal(args)) {
@@ -151,14 +158,21 @@ int execute_line(char *line){
 			signal(SIGINT,SIG_IGN);		//Cuando llegue CTRL + C no haremos nada en este caso
 			signal(SIGTSTP,SIG_IGN);	//Cuando llegue CTRL + Z no haremos nada en este caso
 			signal(SIGCHLD,SIG_DFL);	//Cuando llegue la señal SIGCHLD haremos su función por defecto
+			
 			is_output_redirection(args);
 
 			if (!is_bg)	{	// Si el proceso tiene que ejecutarse en foreground...
 				execvp(args[0], args);
+				#ifdef USE_READLINE
+				#else
+					if (!strcmp(args[0], "\n") || !strcmp(args[0], "\t") || !strcmp(args[0], "\r")) {
+						exit(1);
+					}
+				#endif
+				char *error = malloc(sizeof(error));
+				perror("Error");
 				exit(1);
-			}	
-			else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
-				printf("DEBUG: Proceso en background...\n");
+			} else {			// Si no, se tiene que ejecutar en segundo plano y volver a enseñar el prompt
 				strtok(line_entera, "&");	// Quitamos el & de la linea sin trocear para evitar problemas
 				system(line_entera);
 				exit(0);
@@ -167,9 +181,8 @@ int execute_line(char *line){
 		} else if (pid > 0) {	//Proceso padre
 
 			if (is_bg == 1) {
-				printf("Añadiendo proceso %d a lista jobs...\n",pid);
+				fprintf(stderr,"Añadiendo proceso %d a lista jobs...\n",pid);
 				jobs_list_add(pid,'E',line);
-				printf("DEBUG N_PIDS: %d\n",n_pids);
 			}
 
 			while (jobs_list[0].pid != 0) {
@@ -192,20 +205,21 @@ void reaper(int signum) {
 		} else {
 			int pos = jobs_list_find(pid);
 			if (pos != -1) {	// Si el proceso es en background
-				fprintf(stderr, "Proceso en background con pid %d (%s) acabado\n",pid, jobs_list[pos].command_line);
-				//perror("Test error:");
+				fprintf(stderr, "\nProceso en background con pid %d (%s) acabado\n",pid, jobs_list[pos].command_line);
 				jobs_list_remove(pos);
-				imprimir_prompt();
-		}
+				//imprimir_prompt();
+				}
 		}
 	}
 }
 
 void ctrlc(int signum) {
 	signal(SIGINT, ctrlc);
+	
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
-		if (jobs_list[0].pid != shell_pid) {	// Si el proceso en foreground no es el minishell
+		if (jobs_list[0].pid != shell_pid && strcmp(jobs_list[0].command_line,"./my_shell") != 0) {	// Si el proceso en foreground no es el minishell
 			kill(jobs_list[0].pid,SIGTERM);
+			fprintf(stderr,"Enviando señal 15 a proceso %d...\n", jobs_list[0].pid);
 		} else if (jobs_list[0].pid == shell_pid) {
 			//printf("Señal SIGTERM NO ENVIADA al proceso n.%d porque es el mini shell.\n",jobs_list[0].pid);
 		}
@@ -218,7 +232,7 @@ void ctrlz(int signum) {
 	signal(SIGTSTP, ctrlz);
 	if (jobs_list[0].pid > 0) {  // Si hay un proceso en foreground
 		if (jobs_list[0].pid != shell_pid) {	// Si el proceso en foreground no es el minishell
-			printf("Enviando señal 20 a proceso %d...\n", jobs_list[0].pid);
+			fprintf(stderr,"Enviando señal 20 a proceso %d...\n", jobs_list[0].pid);
 			kill(jobs_list[0].pid,SIGTSTP);
 			jobs_list[0].status = 'D';
 			jobs_list_add(jobs_list[0].pid,jobs_list[0].status,jobs_list[0].command_line);	// Añadimos a array de trabajos
@@ -244,7 +258,34 @@ int parse_args(char **args, char *line) {
 	const char s[2] = " ";
 	//Limpiamos los comentarios de line
 	strtok(line, "#");
-	
+
+	//Implementando cd avanzado
+	if (strchr(line,'"')) {
+		char *path = strchr(line,'"');
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\"";
+		args[contador] = strtok(path, s);
+		return contador;
+	} else if(strchr(line,'\'')){
+		char *path = strchr(line,'\'');
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\'";
+		args[contador] = strtok(path, s);
+		return contador;
+	} else if (strchr(line,'\\')){
+		char *path = strchr(line,'\\');
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\\";
+		args[contador] = strtok(path, s);
+		return contador;
+	}
+
 	//Leemos el primer token
 	token = strtok(line, s);
 	//Bucle while que lee y guarda los tokens en args
@@ -293,7 +334,7 @@ int internal_cd(char **args){
 		chdir(getenv("HOME"));
 		return 1;
 	} else if (chdir(args[1]) == -1) {
-		printf("Directory %s not found\n", args[1]);
+		perror("Error CD");
 	}
 	return 0;
 }
@@ -302,32 +343,28 @@ int internal_cd(char **args){
 //después de un igual (=), para ello descomponemos el argumento
 //con la función strtok().
 int internal_export(char **args){
-
 	if (args[1] == NULL) {
-		printf("Syntax Error. Use: export Name=Value\n");
+		fprintf(stderr,"Syntax Error. Use: export Name=Value\n");
 		return 1;
 	}
 	const char igual = '=';
 	char *pos = strchr(args[1], igual); // Lo que hay después del primer =
 	if (pos == NULL) {
-		printf("Syntax Error. Use: export Name=Value\n");
+		fprintf(stderr,"Syntax Error. Use: export Name=Value\n");
 		return 1;
 	}
 	char *token = strtok(args[1], "=");
 	char *nombre = token;
-	char *valor = NULL;
-	(*pos)++;
-	strcpy(valor,pos);
-
-	printf("Name: %s\n", nombre);
-	printf("Value: %s\n", valor);
+	char *valor = malloc(sizeof(valor));
+	char *inutil = pos;
+	inutil++;
+	strcpy(valor,inutil);
+	
 	if (valor != NULL) {
 		if (getenv(nombre) != NULL) {
-			printf("Antiguo valor para %s: %s\n", nombre, getenv(nombre));
-			printf("Nuevo valor para %s: %s\n", nombre, valor);
 			setenv(nombre, valor, 1);
 		} else {
-			printf("Syntax Error. Introduce a valid name\n");
+			fprintf(stderr,"Syntax Error. Introduce a valid name\n");
 		}
 	}
 	return 0;
@@ -345,22 +382,21 @@ int internal_source(char **args){
 
 	// stream = fopen("nombrefile", "r")
 	if (args[1] == NULL) {
-		printf("Syntax Error. Use: source <filename>\n");
+		fprintf(stderr,"Syntax Error. Use: source <filename>\n");
 		return 1;
 	} else {
-	FILE *file = fopen(args[1],"r"); // abrimos el fichero pasado como argumento en modo solo lectura
+		FILE *file = fopen(args[1],"r"); // abrimos el fichero pasado como argumento en modo solo lectura
 		if (file) {
 			char readcommand[COMMAND_LINE_SIZE];
-
 			while (fgets(readcommand, COMMAND_LINE_SIZE, file)) {
 				fflush(file);
+				strtok(readcommand, "\t\n\r");
 				execute_line(readcommand);
 			}
-
-		fclose(file); // cerramos el fichero
-		return 0;
-
+			fclose(file); // cerramos el fichero
+			return 0;
 		} else {
+			perror("Error Source");
 			return 1;
 		}
 	}
@@ -441,7 +477,7 @@ int is_output_redirection (char **args){
 				args[i+1] = NULL;
 				return 1;
 			} else {
-				printf("Syntax Error. Use: command > file\n");
+				fprintf(stderr,"Syntax Error. Use: command > file\n");
 			}
 		}	
 		i++;

@@ -2,10 +2,10 @@ CC=gcc
 CFLAGS=-c -g -Wall -std=c99
 LDFLAGS=-lreadline
 
-SOURCES= prompt.c
+SOURCES= my_shell.c
 LIBRARIES= #.o
 INCLUDES= #.h
-PROGRAMS=prompt
+PROGRAMS=my_shell
 OBJS=$(SOURCES:.c=.o)
 
 all: $(OBJS) $(PROGRAMS)
@@ -13,7 +13,7 @@ all: $(OBJS) $(PROGRAMS)
 #$(PROGRAMS): $(LIBRARIES) $(INCLUDES)
 #   $(CC) $(LDFLAGS) $(LIBRARIES) $@.o -o $@
 
-prompt: prompt.o
+my_shell: my_shell.o
 	$(CC) $@.o -o $@ $(LDFLAGS) $(LIBRARIES)
 
 %.o: %.c $(INCLUDES)
