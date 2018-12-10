@@ -463,6 +463,8 @@ int jobs_list_remove(int pos) {
 	return 0;
 }
 
+// Devuelve 1 si el usuario ha indicado que quiere ejecutar el comando en background
+// (o sea, si hay un & como ultimo token)
 int is_background(char **args) {
 	int i = 0;
 	while (args[i] != NULL) {
@@ -475,6 +477,9 @@ int is_background(char **args) {
 	return 0;	// Si no, devolvemos 0
 }
 
+// Recorremos los tokens buscando un '>'. Si lo encontramos, y si se
+// define un nombre de fichero en el token siguiente, redirigimos el stdout
+// a ese fichero durante la ejecuciòn de ese comando.
 int is_output_redirection (char **args){
 	int i = 0;
 	while (args[i] != NULL) {
@@ -496,17 +501,17 @@ int is_output_redirection (char **args){
 }
 
 int internal_fg(char **args) {
-	if (args[1] == NULL) {
+	if (args[1] == NULL) {	// Si el numero de trabajo no està especificado, error y salir
 		fprintf(stderr,"No job number specified\n");
 		return 0;
 	}
 	char *temp = malloc(sizeof(temp));
 	strcpy(temp,args[1]);
-	if (strchr(temp,'%'))
+	if (strchr(temp,'%'))	// Si hay un %, lo quitamos avanzando el puntero
 		temp++;
 	
-	int pos = atoi(temp);
-	if (pos > n_pids || pos == 0) {
+	int pos = atoi(temp);	// Convertimos el num. de trabajo a int
+	if (pos > n_pids || pos == 0) {	// Si el num. no es valido, error y salir
 		fprintf(stderr,"Job %d not found\n",pos);
 		return 0;
 	}
@@ -515,10 +520,10 @@ int internal_fg(char **args) {
 		kill(jobs_list[pos].pid, SIGCONT);
 	}
 	jobs_list[0].status = 'E';
-	jobs_list[0].pid = jobs_list[pos].pid;
+	jobs_list[0].pid = jobs_list[pos].pid;	// Pasamos los paràmetros del proceso en bg a foreground
 	strcpy(jobs_list[0].command_line, jobs_list[pos].command_line);
 	strcpy(jobs_list[0].command_line, strtok(jobs_list[0].command_line, "&"));	// Quitamos el &
-	jobs_list_remove(pos);
+	jobs_list_remove(pos);	// Eliminamoos los parametros de bg después de la copia
 	
 	printf("Comando: %s\n", jobs_list[0].command_line);
 	while (jobs_list[0].pid != 0) {
@@ -528,7 +533,7 @@ int internal_fg(char **args) {
 }
 
 int internal_bg(char **args) {
-	if (args[1] == NULL) {
+	if (args[1] == NULL) {	// Si el numero de trabajo no està especificado, error y salir
 		fprintf(stderr,"No job number specified\n");
 		return 0;
 	}
@@ -538,9 +543,7 @@ int internal_bg(char **args) {
 		temp++;
 	
 	int pos = atoi(temp);	// Convertimos el char* a int
-	// Convertimos el char* a int
-	int pos = atoi(args[1]);
-	if (pos > n_pids || pos == 0) {
+	if (pos > n_pids || pos == 0) {	// Si el num. no es valido, error y salir
 		fprintf(stderr,"Job %d not found\n",pos);
 		return 0;
 	} else if (jobs_list[pos].status == 'E') {
