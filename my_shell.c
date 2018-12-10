@@ -165,9 +165,9 @@ int execute_line(char *line){
 				execvp(args[0], args);
 				#ifdef USE_READLINE
 				#else
-				if (strcmp(args[0], "\n") || strcmp(args[0], "\t") || strcmp(args[0], "\r")) {
-					exit(1);
-				}
+					if (!strcmp(args[0], "\n") || !strcmp(args[0], "\t") || !strcmp(args[0], "\r")) {
+						exit(1);
+					}
 				#endif
 				printf("-terminal: %s: command not found\n", args[0]);
 				exit(1);
