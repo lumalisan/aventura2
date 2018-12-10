@@ -325,6 +325,12 @@ int check_internal(char **args){
 		return 1;
 	} else if (strcmp(args[0], "exit") == 0) {
 		exit(0);
+	} else if (strcmp(args[0], "fg") == 0) {
+		internal_fg(args);
+		return 1;
+	} else if (strcmp(args[0], "bg") == 0) {
+		internal_bg(args);
+		return 1;
 	}
 	return 0;
 }
