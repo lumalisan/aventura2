@@ -494,7 +494,24 @@ int is_output_redirection (char **args){
 }
 
 int internal_fg(char **args) {
-	return 0;
+	int p = atoi(args[1]);
+	if (p > n_pids || p == 0) {
+		perror("No existe ese trabajo");
+		return 0;
+	}
+	if (jobs_list[p].status == 'D') {
+		kill(jobs_list[p].pid, SIGCONT);
+	}
+	jobs_list[0].pid = jobs_list[p].pid;
+	jobs_list[0].status = 'E';
+	strcpy(jobs_list[0].command_line, jobs_list[p].command_line);
+	jobs_list_remove(p);
+	strcpy(jobs_list[0].command_line, strtok(jobs_list[0].command_line, "&"));
+	printf("%s\n", jobs_list[0].command_line);
+	while (jobs_list[0].pid != 0) {
+		pause();
+	}
+	return 1;
 }
 
 int internal_bg(char **args) {
@@ -502,15 +519,15 @@ int internal_bg(char **args) {
 	if (pos > n_pids || pos == 0) {
 		fprintf(stderr,"Job %d not found\n",pos);
 		return 0;
-	}
-	if (jobs_list[pos].status == 'E') {
+	} else if (jobs_list[pos].status == 'E') {
 		fprintf(stderr,"This process is already in background!\n");
 		return 0;
+	} else {
+		jobs_list[pos].status = 'E';
+		strcat(jobs_list[pos].command_line, " &");
+		printf("Enviando la señal SIGCONT al proceso %d\n",jobs_list[pos].pid);
+		kill(jobs_list[pos].pid, SIGCONT);
+		printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", pos, jobs_list[pos].pid, jobs_list[pos].command_line, jobs_list[pos].status);
+		return 1;
 	}
-	jobs_list[pos].status = 'E';
-	strcat(jobs_list[pos].command_line, " &");
-	printf("Enviando la señal SIGCONT al proceso %d\n",jobs_list[pos].pid);
-	kill(jobs_list[pos].pid, SIGCONT);
-	printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", pos, jobs_list[pos].pid, jobs_list[pos].command_line, jobs_list[pos].status);
-	return 1;
 }
