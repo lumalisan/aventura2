@@ -284,16 +284,12 @@ int parse_args(char **args, char *line) {
 		return contador;
 	} else if (strchr(line,'\\')){
 		char *aux = strchr(line,'\\');
-		if (aux[1] == ' ') {
-			printf("entramos");
-			char *path ;
-			token = strtok(line, s);
-			args[contador] = token;
-			contador++;
-			const char s[2] = "\\";
-			args[contador] = strtok(path, s);
-			return contador;
-		}
+		token = strtok(line, s);
+		args[contador] = token;
+		contador++;
+		const char s[2] = "\\";
+		args[contador] = strtok(aux, s);
+		return contador;
 	}
 
 	//Leemos el primer token
