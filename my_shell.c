@@ -492,18 +492,19 @@ int internal_fg(char **args) {
 }
 
 int internal_bg(char **args) {
-	int p = atoi(args[1]);
-	if (p > n_pids || p == 0) {
-		perror("No existe este trabajo");
+	int pos = atoi(args[1]);	// Convertimos el char* a int
+	if (pos > n_pids || pos == 0) {
+		fprintf(stderr,"Job %d not found\n",pos);
 		return 0;
 	}
-	if (jobs_list[p].status == 'E') {
-		perror("El trabajo ya esta en segundo plano");
+	if (jobs_list[pos].status == 'E') {
+		fprintf("This process is already in background!\n");
 		return 0;
 	}
-	strcat(jobs_list[p].command_line, " &");
-	jobs_list[p].status = 'E';
-	kill(jobs_list[p].pid, SIGCONT);
-	printf("[%d]\t%c\t%d\t%s\n", p, jobs_list[p].status, jobs_list[p].pid, jobs_list[p].command_line);
+	jobs_list[pos].status = 'E';
+	strcat(jobs_list[pos].command_line, " &");
+	printf("Enviando la señal SIGCONT al proceso %d\n",jobs_list[pos].pid);
+	kill(jobs_list[pos].pid, SIGCONT);
+	printf("Job [%d]\tPID: %d\t%s\tEstado: %c\n", pos, jobs_list[pos].pid, jobs_list[pos].command_line, jobs_list[pos].status);
 	return 1;
 }
