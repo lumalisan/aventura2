@@ -23,7 +23,7 @@
 #define COMMAND_LINE_SIZE 1024
 #define ARGS_SIZE 64
 #define N_JOBS 64
-//#define USE_READLINE
+#define USE_READLINE
 
 struct info_process {
 	pid_t pid;
